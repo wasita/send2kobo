@@ -1,7 +1,12 @@
-<script lang="ts">
+<script>
 	import '../app.css';
 
 	let { children } = $props();
 </script>
 
-{@render children()}
+<div class="container">
+	{@render children()}
+	<footer class="footer">
+		Made by <a href="https://github.com/wasita">wasita</a>
+	</footer>
+</div>

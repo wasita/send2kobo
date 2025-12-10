@@ -1,66 +1,39 @@
-<script lang="ts">
-	interface Props {
-		code: string;
-	}
-
-	let { code }: Props = $props();
+<script>
+	var { code } = $props();
 </script>
 
 <div class="pairing-container">
 	<p class="label">Your pairing code:</p>
-	<div class="code">
-		{#each code.split('') as char, i}
-			<span class="char">{char}</span>
-			{#if i === 2}
-				<span class="separator">-</span>
-			{/if}
-		{/each}
-	</div>
+	<div class="code">{code.substring(0, 3)}-{code.substring(3, 6)}</div>
 	<p class="hint">Enter this code on your Kobo to download files</p>
 </div>
 
 <style>
 	.pairing-container {
 		text-align: center;
-		padding: 2rem;
-		background: #f8f9fa;
-		border-radius: 12px;
-		margin: 1.5rem 0;
+		padding: 24px;
+		border: 3px solid #000;
+		margin: 16px 0;
+		background: #fff;
 	}
 
 	.label {
-		font-size: 1rem;
-		color: #666;
-		margin-bottom: 1rem;
+		margin-bottom: 12px;
 	}
 
 	.code {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.char {
-		font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-		font-size: 3rem;
+		font-family: monospace;
+		font-size: 36px;
 		font-weight: bold;
-		background: white;
-		padding: 0.5rem 1rem;
-		border-radius: 8px;
-		border: 2px solid #e0e0e0;
-		min-width: 3.5rem;
-		text-align: center;
-	}
-
-	.separator {
-		font-size: 2rem;
-		color: #999;
+		letter-spacing: 4px;
+		padding: 16px;
+		border: 2px solid #000;
+		display: inline-block;
+		background: #fff;
 	}
 
 	.hint {
-		font-size: 0.875rem;
-		color: #888;
-		margin-top: 1rem;
+		margin-top: 12px;
+		font-size: 14px;
 	}
 </style>

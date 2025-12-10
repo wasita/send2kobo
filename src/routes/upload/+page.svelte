@@ -1,105 +1,128 @@
-<script lang="ts">
+<script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import PairingCode from '../../components/PairingCode.svelte';
 	import FileUploader from '../../components/FileUploader.svelte';
 	import FileList from '../../components/FileList.svelte';
 	import { getStoredSession, saveSession, clearSession } from '$lib/utils';
-	import { createSession, getSessionById, addFileMetadata, getFilesBySession, deleteFileMetadata, type FileMetadata } from '$lib/firestore';
+	import { createSession, getSessionById, addFileMetadata, getFilesBySession, deleteFileMetadata } from '$lib/firestore';
 	import { uploadFile, deleteFile, getStoragePath } from '$lib/storage';
 
-	interface UploadingFile {
-		id: string;
-		name: string;
-		size: number;
-		progress: number;
-	}
+	var loading = $state(true);
+	var sessionCode = $state('');
+	var sessionId = $state('');
+	var files = $state([]);
+	var uploadingFiles = $state([]);
 
-	let loading = $state(true);
-	let sessionCode = $state('');
-	let sessionId = $state('');
-	let files = $state<FileMetadata[]>([]);
-	let uploadingFiles = $state<UploadingFile[]>([]);
-
-	onMount(async () => {
-		// Check for existing session
-		const stored = getStoredSession();
-		if (stored) {
-			const session = await getSessionById(stored.sessionId);
-			if (session) {
-				sessionId = session.id;
-				sessionCode = session.code;
-				files = await getFilesBySession(session.id);
-				loading = false;
-				return;
-			}
-		}
-
-		// Create new session
-		const session = await createSession();
-		sessionId = session.id;
-		sessionCode = session.code;
-		saveSession(session.id, session.code);
-		loading = false;
+	onMount(function() {
+		initSession();
 	});
 
-	async function handleFilesSelected(selectedFiles: File[]) {
-		for (const file of selectedFiles) {
-			const tempId = crypto.randomUUID();
-
-			// Add to uploading list
-			uploadingFiles = [...uploadingFiles, {
-				id: tempId,
-				name: file.name,
-				size: file.size,
-				progress: 0
-			}];
-
-			try {
-				// Upload to Firebase Storage
-				const downloadUrl = await uploadFile(
-					sessionId,
-					tempId,
-					file,
-					(progress) => {
-						uploadingFiles = uploadingFiles.map(f =>
-							f.id === tempId ? { ...f, progress: progress.progress } : f
-						);
-					}
-				);
-
-				// Save metadata to Firestore
-				const metadata = await addFileMetadata({
-					sessionId,
-					name: file.name,
-					size: file.size,
-					type: file.type,
-					storagePath: getStoragePath(sessionId, tempId, file.name),
-					downloadUrl,
-					uploadedAt: new Date()
+	function initSession() {
+		var stored = getStoredSession();
+		if (stored) {
+			getSessionById(stored.sessionId).then(function(session) {
+				if (session) {
+					sessionId = session.id;
+					sessionCode = session.code;
+					return getFilesBySession(session.id);
+				}
+				return createNewSession();
+			}).then(function(result) {
+				if (Array.isArray(result)) {
+					files = result;
+				}
+				loading = false;
+			}).catch(function() {
+				createNewSession().then(function() {
+					loading = false;
 				});
-
-				// Remove from uploading, add to files
-				uploadingFiles = uploadingFiles.filter(f => f.id !== tempId);
-				files = [metadata, ...files];
-			} catch (error) {
-				console.error('Upload failed:', error);
-				uploadingFiles = uploadingFiles.filter(f => f.id !== tempId);
-			}
+			});
+		} else {
+			createNewSession().then(function() {
+				loading = false;
+			});
 		}
 	}
 
-	async function handleDelete(file: FileMetadata) {
-		try {
-			// Delete from Storage
-			await deleteFile(file.storagePath);
-			// Delete metadata from Firestore
-			await deleteFileMetadata(file.id);
-			// Update local state
-			files = files.filter(f => f.id !== file.id);
-		} catch (error) {
-			console.error('Delete failed:', error);
+	function createNewSession() {
+		return createSession().then(function(session) {
+			sessionId = session.id;
+			sessionCode = session.code;
+			saveSession(session.id, session.code);
+		});
+	}
+
+	function handleFilesSelected(selectedFiles) {
+		for (var i = 0; i < selectedFiles.length; i++) {
+			uploadSingleFile(selectedFiles[i]);
 		}
+	}
+
+	function uploadSingleFile(file) {
+		var tempId = generateId();
+
+		uploadingFiles = uploadingFiles.concat([{
+			id: tempId,
+			name: file.name,
+			size: file.size,
+			progress: 0
+		}]);
+
+		uploadFile(
+			sessionId,
+			tempId,
+			file,
+			function(progress) {
+				uploadingFiles = uploadingFiles.map(function(f) {
+					if (f.id === tempId) {
+						return { id: f.id, name: f.name, size: f.size, progress: progress.progress };
+					}
+					return f;
+				});
+			}
+		).then(function(downloadUrl) {
+			return addFileMetadata({
+				sessionId: sessionId,
+				name: file.name,
+				size: file.size,
+				type: file.type,
+				storagePath: getStoragePath(sessionId, tempId, file.name),
+				downloadUrl: downloadUrl,
+				uploadedAt: new Date()
+			});
+		}).then(function(metadata) {
+			uploadingFiles = uploadingFiles.filter(function(f) {
+				return f.id !== tempId;
+			});
+			files = [metadata].concat(files);
+		}).catch(function(error) {
+			console.error('Upload failed:', error);
+			uploadingFiles = uploadingFiles.filter(function(f) {
+				return f.id !== tempId;
+			});
+		});
+	}
+
+	function generateId() {
+		var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+		var result = '';
+		for (var i = 0; i < 16; i++) {
+			result += chars.charAt(Math.floor(Math.random() * chars.length));
+		}
+		return result;
+	}
+
+	function handleDelete(file) {
+		deleteFile(file.storagePath).then(function() {
+			return deleteFileMetadata(file.id);
+		}).then(function() {
+			files = files.filter(function(f) {
+				return f.id !== file.id;
+			});
+		}).catch(function(error) {
+			console.error('Delete failed:', error);
+		});
 	}
 
 	function handleNewSession() {
@@ -118,82 +141,46 @@
 	</div>
 {:else}
 	<div class="upload-page">
-		<header>
+		<header class="page-header">
 			<a href="/" class="logo">Send2Kobo</a>
-			<button class="new-session" onclick={handleNewSession}>New Session</button>
+			<button class="btn btn-outline" onclick={handleNewSession}>New Session</button>
 		</header>
 
-		<main>
-			<PairingCode code={sessionCode} />
+		<PairingCode code={sessionCode} />
 
-			<section class="upload-section">
-				<h2>Upload Files</h2>
-				<FileUploader onFilesSelected={handleFilesSelected} disabled={uploadingFiles.length > 0} />
-			</section>
+		<section class="mb-24">
+			<h2 class="mb-16">Upload Files</h2>
+			<FileUploader onFilesSelected={handleFilesSelected} disabled={uploadingFiles.length > 0} />
+		</section>
 
-			<section class="files-section">
-				<h2>Your Files</h2>
-				<FileList {files} {uploadingFiles} onDelete={handleDelete} />
-			</section>
-		</main>
+		<section>
+			<h2 class="mb-16">Your Files</h2>
+			<FileList {files} {uploadingFiles} onDelete={handleDelete} />
+		</section>
 	</div>
 {/if}
 
 <style>
-	.loading {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		min-height: 100vh;
-	}
-
 	.upload-page {
-		min-height: 100vh;
-		max-width: 800px;
-		margin: 0 auto;
-		padding: 1.5rem;
+		padding: 16px 0;
 	}
 
-	header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 2rem;
+	.page-header {
+		display: block;
+		margin-bottom: 24px;
+		padding-bottom: 16px;
+		border-bottom: 2px solid #000;
 	}
 
 	.logo {
-		font-size: 1.5rem;
-		font-weight: 700;
+		font-size: 20px;
+		font-weight: bold;
 		text-decoration: none;
-		color: inherit;
+		display: block;
+		margin-bottom: 12px;
 	}
 
-	.new-session {
-		padding: 0.5rem 1rem;
-		background: none;
-		border: 1px solid #ddd;
-		border-radius: 8px;
-		cursor: pointer;
-		font-size: 0.875rem;
-	}
-
-	.new-session:hover {
-		background: #f5f5f5;
-	}
-
-	main {
-		display: flex;
-		flex-direction: column;
-		gap: 2rem;
-	}
-
-	section h2 {
-		font-size: 1.25rem;
-		font-weight: 600;
-		margin-bottom: 1rem;
-	}
-
-	.upload-section {
-		margin-bottom: 1rem;
+	h2 {
+		font-size: 18px;
 	}
 </style>

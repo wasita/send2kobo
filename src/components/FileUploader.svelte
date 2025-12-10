@@ -1,61 +1,30 @@
-<script lang="ts">
+<script>
 	import { isValidFileType, isValidFileSize, ALLOWED_EXTENSIONS, formatFileSize, MAX_FILE_SIZE } from '$lib/utils';
 
-	interface Props {
-		onFilesSelected: (files: File[]) => void;
-		disabled?: boolean;
-	}
+	var { onFilesSelected, disabled } = $props();
 
-	let { onFilesSelected, disabled = false }: Props = $props();
+	var error = $state('');
+	var fileInput;
 
-	let isDragging = $state(false);
-	let fileInput: HTMLInputElement;
-	let error = $state('');
-
-	function handleDragEnter(e: DragEvent) {
-		e.preventDefault();
-		if (!disabled) isDragging = true;
-	}
-
-	function handleDragLeave(e: DragEvent) {
-		e.preventDefault();
-		isDragging = false;
-	}
-
-	function handleDragOver(e: DragEvent) {
-		e.preventDefault();
-	}
-
-	function handleDrop(e: DragEvent) {
-		e.preventDefault();
-		isDragging = false;
-		if (disabled) return;
-
-		const files = e.dataTransfer?.files;
-		if (files) {
-			processFiles(Array.from(files));
-		}
-	}
-
-	function handleFileSelect(e: Event) {
-		const input = e.target as HTMLInputElement;
+	function handleFileSelect(e) {
+		var input = e.target;
 		if (input.files) {
-			processFiles(Array.from(input.files));
+			processFiles(input.files);
 		}
-		// Reset input so same file can be selected again
 		input.value = '';
 	}
 
-	function processFiles(files: File[]) {
+	function processFiles(fileList) {
 		error = '';
-		const validFiles: File[] = [];
-		const errors: string[] = [];
+		var validFiles = [];
+		var errors = [];
 
-		for (const file of files) {
+		for (var i = 0; i < fileList.length; i++) {
+			var file = fileList[i];
 			if (!isValidFileType(file.name)) {
-				errors.push(`"${file.name}" - unsupported format`);
+				errors.push('"' + file.name + '" - unsupported format');
 			} else if (!isValidFileSize(file.size)) {
-				errors.push(`"${file.name}" - exceeds ${formatFileSize(MAX_FILE_SIZE)} limit`);
+				errors.push('"' + file.name + '" - exceeds ' + formatFileSize(MAX_FILE_SIZE) + ' limit');
 			} else {
 				validFiles.push(file);
 			}
@@ -71,113 +40,83 @@
 	}
 
 	function openFilePicker() {
-		if (!disabled) {
+		if (!disabled && fileInput) {
 			fileInput.click();
 		}
 	}
 </script>
 
-<div
-	class="uploader"
-	class:dragging={isDragging}
-	class:disabled
-	ondragenter={handleDragEnter}
-	ondragleave={handleDragLeave}
-	ondragover={handleDragOver}
-	ondrop={handleDrop}
-	onclick={openFilePicker}
-	onkeydown={(e) => e.key === 'Enter' && openFilePicker()}
-	role="button"
-	tabindex={disabled ? -1 : 0}
->
+<div class="uploader">
 	<input
 		bind:this={fileInput}
 		type="file"
 		multiple
 		accept={ALLOWED_EXTENSIONS.join(',')}
 		onchange={handleFileSelect}
+		disabled={disabled}
 	/>
 
-	<div class="content">
-		<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-			<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-			<polyline points="17 8 12 3 7 8" />
-			<line x1="12" y1="3" x2="12" y2="15" />
-		</svg>
-		<p class="main-text">
-			{#if isDragging}
-				Drop files here
-			{:else}
-				Drag & drop files or click to browse
-			{/if}
-		</p>
-		<p class="sub-text">
-			EPUB, PDF, MOBI, TXT, CBZ, CBR and more • Max {formatFileSize(MAX_FILE_SIZE)} per file
-		</p>
+	<div class="upload-box" onclick={openFilePicker}>
+		<p class="main-text">Click to select files</p>
+		<p class="sub-text">EPUB, PDF, MOBI, TXT, CBZ, CBR and more</p>
+		<p class="sub-text">Max {formatFileSize(MAX_FILE_SIZE)} per file</p>
 	</div>
+
+	{#if disabled}
+		<p class="status">Upload in progress...</p>
+	{/if}
 </div>
 
 {#if error}
-	<p class="error">{error}</p>
+	<p class="error-msg">{error}</p>
 {/if}
 
 <style>
 	.uploader {
-		border: 3px dashed #ccc;
-		border-radius: 16px;
-		padding: 3rem 2rem;
-		text-align: center;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		background: #fafafa;
-	}
-
-	.uploader:hover:not(.disabled) {
-		border-color: #999;
-		background: #f5f5f5;
-	}
-
-	.uploader.dragging {
-		border-color: #333;
-		background: #f0f0f0;
-	}
-
-	.uploader.disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
+		margin-bottom: 16px;
 	}
 
 	input[type="file"] {
-		display: none;
+		position: absolute;
+		left: -9999px;
 	}
 
-	.content {
-		pointer-events: none;
+	.upload-box {
+		border: 3px dashed #000;
+		padding: 32px 16px;
+		text-align: center;
+		cursor: pointer;
+		background: #fff;
 	}
 
-	.icon {
-		width: 48px;
-		height: 48px;
-		color: #666;
-		margin-bottom: 1rem;
+	.upload-box:active {
+		background: #eee;
 	}
 
 	.main-text {
-		font-size: 1.25rem;
-		font-weight: 500;
-		color: #333;
-		margin-bottom: 0.5rem;
+		font-size: 18px;
+		font-weight: bold;
+		margin-bottom: 8px;
 	}
 
 	.sub-text {
-		font-size: 0.875rem;
-		color: #888;
+		font-size: 14px;
+		margin-top: 4px;
 	}
 
-	.error {
-		color: #d32f2f;
-		font-size: 0.875rem;
-		margin-top: 0.5rem;
+	.status {
 		text-align: center;
+		padding: 12px;
+		background: #f5f5f5;
+		border: 2px solid #000;
+		margin-top: 12px;
+	}
+
+	.error-msg {
+		color: #000;
+		font-weight: bold;
+		padding: 12px;
+		border: 2px solid #000;
+		margin-top: 12px;
 	}
 </style>

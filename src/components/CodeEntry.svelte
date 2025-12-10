@@ -1,30 +1,17 @@
-<script lang="ts">
-	interface Props {
-		onSubmit: (code: string) => void;
-		error?: string;
-		loading?: boolean;
+<script>
+	var { onSubmit, error, loading } = $props();
+
+	var code = $state('');
+
+	function handleInput(e) {
+		var input = e.target;
+		code = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 6);
 	}
 
-	let { onSubmit, error = '', loading = false }: Props = $props();
-
-	let code = $state('');
-
-	function handleInput(e: Event) {
-		const input = e.target as HTMLInputElement;
-		// Only allow alphanumeric, uppercase
-		code = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-	}
-
-	function handleSubmit(e: Event) {
+	function handleSubmit(e) {
 		e.preventDefault();
 		if (code.length === 6 && !loading) {
 			onSubmit(code);
-		}
-	}
-
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') {
-			handleSubmit(e);
 		}
 	}
 </script>
@@ -37,17 +24,15 @@
 			type="text"
 			value={code}
 			oninput={handleInput}
-			onkeydown={handleKeydown}
 			placeholder="ABC123"
 			maxlength="6"
 			autocomplete="off"
-			autocapitalize="characters"
 			disabled={loading}
 		/>
 		{#if error}
-			<p class="error">{error}</p>
+			<p class="error-msg">{error}</p>
 		{/if}
-		<button type="submit" disabled={code.length !== 6 || loading}>
+		<button type="submit" class="btn" disabled={code.length !== 6 || loading}>
 			{loading ? 'Connecting...' : 'Connect'}
 		</button>
 	</form>
@@ -57,65 +42,49 @@
 	.code-entry {
 		max-width: 400px;
 		margin: 0 auto;
-		padding: 2rem;
+		padding: 16px;
 	}
 
 	form {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
+		text-align: center;
 	}
 
 	label {
-		font-size: 1.25rem;
-		font-weight: 500;
-		text-align: center;
+		display: block;
+		font-size: 18px;
+		font-weight: bold;
+		margin-bottom: 16px;
 	}
 
 	input {
-		font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-		font-size: 2.5rem;
+		display: block;
+		width: 100%;
+		font-family: monospace;
+		font-size: 28px;
 		text-align: center;
-		padding: 1rem;
-		border: 3px solid #333;
-		border-radius: 12px;
-		letter-spacing: 0.5rem;
+		padding: 16px;
+		border: 3px solid #000;
+		letter-spacing: 8px;
 		text-transform: uppercase;
-	}
-
-	input:focus {
-		outline: none;
-		border-color: #000;
+		margin-bottom: 16px;
+		background: #fff;
 	}
 
 	input:disabled {
-		background: #f5f5f5;
+		background: #eee;
 	}
 
-	.error {
-		color: #d32f2f;
-		text-align: center;
-		font-size: 1rem;
-		margin: 0;
+	.error-msg {
+		color: #000;
+		font-weight: bold;
+		margin-bottom: 16px;
+		padding: 12px;
+		border: 2px solid #000;
 	}
 
 	button {
-		font-size: 1.5rem;
-		padding: 1rem 2rem;
-		background: #000;
-		color: white;
-		border: none;
-		border-radius: 12px;
-		cursor: pointer;
-		font-weight: 600;
-	}
-
-	button:hover:not(:disabled) {
-		background: #333;
-	}
-
-	button:disabled {
-		background: #ccc;
-		cursor: not-allowed;
+		width: 100%;
+		font-size: 20px;
+		padding: 16px;
 	}
 </style>

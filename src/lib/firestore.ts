@@ -31,106 +31,117 @@ export interface FileMetadata {
 	uploadedAt: Date;
 }
 
-const SESSIONS_COLLECTION = 'sessions';
-const FILES_COLLECTION = 'files';
-const SESSION_DURATION_HOURS = 24;
+var SESSIONS_COLLECTION = 'sessions';
+var FILES_COLLECTION = 'files';
+var SESSION_DURATION_HOURS = 24;
 
 // Create a new session with a unique pairing code
-export async function createSession(): Promise<Session> {
-	const sessionsRef = collection(db, SESSIONS_COLLECTION);
-	let code: string;
-	let isUnique = false;
+export function createSession(): Promise<Session> {
+	var sessionsRef = collection(db, SESSIONS_COLLECTION);
 
-	// Generate unique code
-	do {
-		code = generatePairingCode();
-		const q = query(sessionsRef, where('code', '==', code));
-		const snapshot = await getDocs(q);
-		isUnique = snapshot.empty;
-	} while (!isUnique);
+	function tryCreateWithCode(): Promise<Session> {
+		var code = generatePairingCode();
+		var q = query(sessionsRef, where('code', '==', code));
 
-	const now = new Date();
-	const expiresAt = new Date(now.getTime() + SESSION_DURATION_HOURS * 60 * 60 * 1000);
+		return getDocs(q).then(function(snapshot) {
+			if (!snapshot.empty) {
+				// Code not unique, try again
+				return tryCreateWithCode();
+			}
 
-	const sessionDoc = doc(sessionsRef);
-	const session: Session = {
-		id: sessionDoc.id,
-		code,
-		createdAt: now,
-		expiresAt
-	};
+			var now = new Date();
+			var expiresAt = new Date(now.getTime() + SESSION_DURATION_HOURS * 60 * 60 * 1000);
 
-	await setDoc(sessionDoc, {
-		code,
-		createdAt: Timestamp.fromDate(now),
-		expiresAt: Timestamp.fromDate(expiresAt)
-	});
+			var sessionDoc = doc(sessionsRef);
+			var session: Session = {
+				id: sessionDoc.id,
+				code: code,
+				createdAt: now,
+				expiresAt: expiresAt
+			};
 
-	return session;
+			return setDoc(sessionDoc, {
+				code: code,
+				createdAt: Timestamp.fromDate(now),
+				expiresAt: Timestamp.fromDate(expiresAt)
+			}).then(function() {
+				return session;
+			});
+		});
+	}
+
+	return tryCreateWithCode();
 }
 
 // Get session by ID
-export async function getSessionById(sessionId: string): Promise<Session | null> {
-	const sessionDoc = await getDoc(doc(db, SESSIONS_COLLECTION, sessionId));
+export function getSessionById(sessionId: string): Promise<Session | null> {
+	return getDoc(doc(db, SESSIONS_COLLECTION, sessionId)).then(function(sessionDoc) {
+		if (!sessionDoc.exists()) {
+			return null;
+		}
 
-	if (!sessionDoc.exists()) {
-		return null;
-	}
+		var data = sessionDoc.data();
+		var session: Session = {
+			id: sessionDoc.id,
+			code: data.code,
+			createdAt: data.createdAt.toDate(),
+			expiresAt: data.expiresAt.toDate()
+		};
 
-	const data = sessionDoc.data();
-	const session: Session = {
-		id: sessionDoc.id,
-		code: data.code,
-		createdAt: data.createdAt.toDate(),
-		expiresAt: data.expiresAt.toDate()
-	};
+		// Check if expired
+		if (session.expiresAt < new Date()) {
+			return null;
+		}
 
-	// Check if expired
-	if (session.expiresAt < new Date()) {
-		return null;
-	}
-
-	return session;
+		return session;
+	});
 }
 
 // Get session by pairing code
-export async function getSessionByCode(code: string): Promise<Session | null> {
-	const sessionsRef = collection(db, SESSIONS_COLLECTION);
-	const q = query(sessionsRef, where('code', '==', code.toUpperCase()));
-	const snapshot = await getDocs(q);
+export function getSessionByCode(code: string): Promise<Session | null> {
+	var sessionsRef = collection(db, SESSIONS_COLLECTION);
+	var q = query(sessionsRef, where('code', '==', code.toUpperCase()));
 
-	if (snapshot.empty) {
-		return null;
-	}
+	return getDocs(q).then(function(snapshot) {
+		if (snapshot.empty) {
+			return null;
+		}
 
-	const sessionDoc = snapshot.docs[0];
-	const data = sessionDoc.data();
-	const session: Session = {
-		id: sessionDoc.id,
-		code: data.code,
-		createdAt: data.createdAt.toDate(),
-		expiresAt: data.expiresAt.toDate()
-	};
+		var sessionDoc = snapshot.docs[0];
+		var data = sessionDoc.data();
+		var session: Session = {
+			id: sessionDoc.id,
+			code: data.code,
+			createdAt: data.createdAt.toDate(),
+			expiresAt: data.expiresAt.toDate()
+		};
 
-	// Check if expired
-	if (session.expiresAt < new Date()) {
-		return null;
-	}
+		// Check if expired
+		if (session.expiresAt < new Date()) {
+			return null;
+		}
 
-	return session;
+		return session;
+	});
 }
 
 // Add file metadata
-export async function addFileMetadata(file: Omit<FileMetadata, 'id'>): Promise<FileMetadata> {
-	const filesRef = collection(db, FILES_COLLECTION);
-	const fileDoc = doc(filesRef);
+export function addFileMetadata(file: Omit<FileMetadata, 'id'>): Promise<FileMetadata> {
+	var filesRef = collection(db, FILES_COLLECTION);
+	var fileDoc = doc(filesRef);
 
-	const metadata: FileMetadata = {
-		...file,
-		id: fileDoc.id
+	var metadata: FileMetadata = {
+		id: fileDoc.id,
+		sessionId: file.sessionId,
+		name: file.name,
+		size: file.size,
+		type: file.type,
+		storagePath: file.storagePath,
+		downloadUrl: file.downloadUrl,
+		uploadedAt: file.uploadedAt
 	};
 
-	await setDoc(fileDoc, {
+	return setDoc(fileDoc, {
 		sessionId: file.sessionId,
 		name: file.name,
 		size: file.size,
@@ -138,37 +149,41 @@ export async function addFileMetadata(file: Omit<FileMetadata, 'id'>): Promise<F
 		storagePath: file.storagePath,
 		downloadUrl: file.downloadUrl,
 		uploadedAt: Timestamp.fromDate(file.uploadedAt)
+	}).then(function() {
+		return metadata;
 	});
-
-	return metadata;
 }
 
 // Get files for a session
-export async function getFilesBySession(sessionId: string): Promise<FileMetadata[]> {
-	const filesRef = collection(db, FILES_COLLECTION);
-	const q = query(
+export function getFilesBySession(sessionId: string): Promise<FileMetadata[]> {
+	var filesRef = collection(db, FILES_COLLECTION);
+	var q = query(
 		filesRef,
 		where('sessionId', '==', sessionId),
 		orderBy('uploadedAt', 'desc')
 	);
-	const snapshot = await getDocs(q);
 
-	return snapshot.docs.map((doc) => {
-		const data = doc.data();
-		return {
-			id: doc.id,
-			sessionId: data.sessionId,
-			name: data.name,
-			size: data.size,
-			type: data.type,
-			storagePath: data.storagePath,
-			downloadUrl: data.downloadUrl,
-			uploadedAt: data.uploadedAt.toDate()
-		};
+	return getDocs(q).then(function(snapshot) {
+		var results: FileMetadata[] = [];
+		for (var i = 0; i < snapshot.docs.length; i++) {
+			var docSnap = snapshot.docs[i];
+			var data = docSnap.data();
+			results.push({
+				id: docSnap.id,
+				sessionId: data.sessionId,
+				name: data.name,
+				size: data.size,
+				type: data.type,
+				storagePath: data.storagePath,
+				downloadUrl: data.downloadUrl,
+				uploadedAt: data.uploadedAt.toDate()
+			});
+		}
+		return results;
 	});
 }
 
 // Delete file metadata
-export async function deleteFileMetadata(fileId: string): Promise<void> {
-	await deleteDoc(doc(db, FILES_COLLECTION, fileId));
+export function deleteFileMetadata(fileId: string): Promise<void> {
+	return deleteDoc(doc(db, FILES_COLLECTION, fileId));
 }
