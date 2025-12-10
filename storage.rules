@@ -1,0 +1,15 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /uploads/{sessionId}/{allPaths=**} {
+      // Anyone can read (download) files
+      allow read: if true;
+
+      // Anyone can write files up to 5GB (Firebase limit)
+      allow write: if request.resource.size < 5 * 1024 * 1024 * 1024;
+
+      // Anyone can delete files
+      allow delete: if true;
+    }
+  }
+}

@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Sessions collection
+    match /sessions/{sessionId} {
+      // Anyone can read sessions (needed to look up by code)
+      allow read: if true;
+      // Anyone can create a session
+      allow create: if true;
+      // No updates or deletes from client
+      allow update, delete: if false;
+    }
+
+    // Files collection
+    match /files/{fileId} {
+      // Anyone can read files (to list files for a session)
+      allow read: if true;
+      // Anyone can create files (upload metadata)
+      allow create: if true;
+      // Anyone can delete files (owner deletes their files)
+      allow delete: if true;
+      // No updates to file metadata
+      allow update: if false;
+    }
+  }
+}
