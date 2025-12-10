@@ -4,10 +4,22 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
+        "source": "/kobo",
+        "function": "kobo"
+      },
+      {
+        "source": "/download",
+        "function": "download"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
     ]
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
   },
   "firestore": {
     "rules": "firestore.rules",

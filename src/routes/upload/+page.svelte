@@ -1,11 +1,12 @@
 <script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import PairingCode from '../../components/PairingCode.svelte';
 	import FileUploader from '../../components/FileUploader.svelte';
 	import FileList from '../../components/FileList.svelte';
 	import { getStoredSession, saveSession, clearSession } from '$lib/utils';
-	import { createSession, getSessionById, addFileMetadata, getFilesBySession, deleteFileMetadata } from '$lib/firestore';
+	import { createSession, getSessionById, getSessionByCode, addFileMetadata, getFilesBySession, deleteFileMetadata } from '$lib/firestore';
 	import { uploadFile, deleteFile, getStoragePath } from '$lib/storage';
 
 	var loading = $state(true);
@@ -19,6 +20,20 @@
 	});
 
 	function initSession() {
+		// Check for code in URL query params first
+		var urlParams = new URLSearchParams(window.location.search);
+		var codeParam = urlParams.get('code');
+
+		if (codeParam) {
+			// Try to connect with the provided code
+			var cleanCode = codeParam.toUpperCase().replace(/[^A-Z0-9]/g, '');
+			if (cleanCode.length === 6) {
+				connectWithCode(cleanCode);
+				return;
+			}
+		}
+
+		// Otherwise check stored session
 		var stored = getStoredSession();
 		if (stored) {
 			getSessionById(stored.sessionId).then(function(session) {
@@ -43,6 +58,29 @@
 				loading = false;
 			});
 		}
+	}
+
+	function connectWithCode(code) {
+		getSessionByCode(code).then(function(session) {
+			if (session) {
+				sessionId = session.id;
+				sessionCode = session.code;
+				saveSession(session.id, session.code);
+				return getFilesBySession(session.id);
+			} else {
+				// Code not found, create new session
+				return createNewSession();
+			}
+		}).then(function(result) {
+			if (Array.isArray(result)) {
+				files = result;
+			}
+			loading = false;
+		}).catch(function() {
+			createNewSession().then(function() {
+				loading = false;
+			});
+		});
 	}
 
 	function createNewSession() {

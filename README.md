@@ -6,10 +6,17 @@ Transfer files to your Kobo e-reader wirelessly using a simple pairing code.
 
 - Upload files from your computer or phone
 - Download on your Kobo e-reader using a 6-character pairing code
+- Server-rendered Kobo page (works on Kobo's limited browser)
 - Supports all Kobo-compatible formats: EPUB, PDF, MOBI, TXT, CBZ, CBR, and more
-- E-ink optimized download interface
 - Sessions expire after 24 hours
-- 100MB max file size
+- 5GB max file size
+
+## How It Works
+
+1. **On your computer:** Visit `https://your-site.web.app/upload`, get a 6-character pairing code, and upload files
+2. **On your Kobo:** Open the browser, go to `https://your-site.web.app/kobo`, enter the code, and download your files
+
+The Kobo page (`/kobo`) is server-rendered via Cloud Functions, so it works on the Kobo's old WebKit browser which can't run modern JavaScript.
 
 ## Supported File Formats
 
@@ -18,23 +25,26 @@ Transfer files to your Kobo e-reader wirelessly using a simple pairing code.
 - **Comics:** CBZ, CBR
 - **Images:** JPEG, PNG, BMP, TIFF, GIF
 
+## Tech Stack
+
+- **Frontend:** SvelteKit + TypeScript + Vanilla CSS (no Tailwind - for e-ink compatibility)
+- **Backend:** Firebase (Firestore + Storage + Cloud Functions)
+- **Hosting:** Firebase Hosting
+
 ## Setup
 
 ### 1. Create a Firebase Project
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Create a new project
-3. Enable **Firestore Database** (start in test mode)
-4. Enable **Storage** (start in test mode)
-5. Register a web app and copy the config
+3. **Upgrade to Blaze plan** (required for Cloud Functions)
+4. Enable **Firestore Database** (start in test mode)
+5. Enable **Storage** (start in test mode)
+6. Register a web app and copy the config
 
 ### 2. Configure Environment
 
-Copy `.env.example` to `.env` and fill in your Firebase config:
-
-```sh
-cp .env.example .env
-```
+Create a `.env` file with your Firebase config:
 
 ```
 PUBLIC_FIREBASE_API_KEY=your-api-key
@@ -48,7 +58,11 @@ PUBLIC_FIREBASE_APP_ID=your-app-id
 ### 3. Install Dependencies
 
 ```sh
+# Install frontend dependencies
 npm install
+
+# Install Cloud Functions dependencies
+cd functions && npm install && cd ..
 ```
 
 ### 4. Run Development Server
@@ -57,43 +71,73 @@ npm install
 npm run dev
 ```
 
-## Deployment to Firebase Hosting
+Note: The `/kobo` endpoint requires Cloud Functions, so it won't work locally without the Firebase emulator.
+
+## Deployment
 
 ### 1. Install Firebase CLI
 
 ```sh
 npm install -g firebase-tools
-```
-
-### 2. Login and Initialize
-
-```sh
 firebase login
-firebase init
 ```
 
-Select:
-- Firestore (to deploy security rules)
-- Storage (to deploy security rules)
-- Hosting (select "build" as public directory)
-
-### 3. Deploy Security Rules
-
-```sh
-firebase deploy --only firestore:rules,storage:rules
-```
-
-### 4. Build and Deploy
+### 2. Build the Frontend
 
 ```sh
 npm run build
-firebase deploy --only hosting
 ```
 
-## How It Works
+### 3. Build Cloud Functions
 
-1. **On your computer:** Visit the site, get a 6-character pairing code, and upload files
-2. **On your Kobo:** Open the browser, go to the same site, enter the code, and download your files
+```sh
+cd functions && npm run build && cd ..
+```
+
+### 4. Deploy Everything
+
+```sh
+firebase deploy --project your-project-id
+```
+
+Or deploy individually:
+
+```sh
+# Deploy hosting only
+firebase deploy --only hosting
+
+# Deploy functions only
+firebase deploy --only functions
+
+# Deploy Firestore rules
+firebase deploy --only firestore:rules
+
+# Deploy Storage rules
+firebase deploy --only storage:rules
+```
+
+## Project Structure
+
+```
+send2kobo/
+├── src/
+│   ├── routes/           # SvelteKit pages
+│   │   ├── +page.svelte  # Home page
+│   │   ├── upload/       # Upload page (for computers/phones)
+│   │   └── download/     # Download page (modern browsers)
+│   ├── components/       # Svelte components
+│   └── lib/              # Utilities, Firebase config
+├── functions/
+│   └── src/
+│       └── index.ts      # Cloud Functions (kobo page, download proxy)
+├── static/               # Static assets
+└── build/                # Production build output
+```
+
+## Cloud Functions
+
+- **`/kobo`** - Server-rendered download page for Kobo e-readers
+- **`/download`** - Download proxy that sets correct filename headers
 
 ## Development
 
@@ -109,10 +153,12 @@ npm run preview
 
 # Type check
 npm run check
+
+# Build functions
+cd functions && npm run build
 ```
 
-## Tech Stack
+## URL Parameters
 
-- **Frontend:** SvelteKit + TypeScript
-- **Backend:** Firebase (Firestore + Storage)
-- **Hosting:** Firebase Hosting
+- **Upload page:** `https://your-site.web.app/upload?code=ABC123` - Reconnect to an existing session
+- **Kobo page:** `https://your-site.web.app/kobo?code=ABC123` - Auto-connect with code
