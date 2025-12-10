@@ -130,8 +130,9 @@ ${content}
 </body>
 </html>`;
 }
-// Download proxy - forces correct filename via Content-Disposition header
-exports.download = functions.runWith({ timeoutSeconds: 540, memory: "512MB" }).https.onRequest(async (req, res) => {
+// Download proxy for small files - forces correct filename via Content-Disposition header
+// Only used for files under 50MB to avoid timeouts
+exports.download = functions.runWith({ timeoutSeconds: 300, memory: "512MB" }).https.onRequest(async (req, res) => {
     const fileId = req.query.id;
     if (!fileId) {
         res.status(400).send("Missing file ID");
@@ -253,19 +254,24 @@ exports.kobo = functions.https.onRequest(async (req, res) => {
             fileListHtml = `<div class="empty">No files uploaded yet. Upload files from your computer first.</div>`;
         }
         else {
+            const MAX_PROXY_SIZE = 50 * 1024 * 1024; // 50MB threshold
             filesQuery.docs.forEach((doc) => {
                 var _a;
                 const file = doc.data();
                 const ext = ((_a = file.name.split(".").pop()) === null || _a === void 0 ? void 0 : _a.toUpperCase()) || "FILE";
-                // Use proxy URL to ensure correct filename on Kobo
-                const proxyUrl = `/download?id=${doc.id}`;
+                const isLargeFile = file.size > MAX_PROXY_SIZE;
+                // Use proxy for small files (correct filename), direct URL for large files (faster)
+                const downloadUrl = isLargeFile ? file.downloadUrl : `/download?id=${doc.id}`;
+                const sizeNote = isLargeFile
+                    ? `<p style="font-size: 12px; margin-top: 8px;">Large file - will save with a long name.</p>`
+                    : "";
                 fileListHtml += `
 <div class="file-item">
   <span class="file-ext">${ext}</span>
   <div class="file-name">${file.name}</div>
   <div class="file-size">${formatFileSize(file.size)}</div>
-  <a href="${proxyUrl}" class="btn">Download</a>
-  <p style="font-size: 12px; margin-top: 8px;">Not working? <a href="${file.downloadUrl}">Try direct link</a></p>
+  <a href="${downloadUrl}" class="btn">Download</a>
+  ${sizeNote}
 </div>`;
             });
         }
