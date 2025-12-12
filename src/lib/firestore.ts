@@ -5,6 +5,7 @@ import {
 	getDoc,
 	getDocs,
 	deleteDoc,
+	updateDoc,
 	query,
 	where,
 	Timestamp,
@@ -33,7 +34,7 @@ export interface FileMetadata {
 
 var SESSIONS_COLLECTION = 'sessions';
 var FILES_COLLECTION = 'files';
-var SESSION_DURATION_HOURS = 24;
+var SESSION_DURATION_DAYS = 90; // 3 months
 
 // Create a new session with a unique pairing code
 export function createSession(): Promise<Session> {
@@ -50,7 +51,7 @@ export function createSession(): Promise<Session> {
 			}
 
 			var now = new Date();
-			var expiresAt = new Date(now.getTime() + SESSION_DURATION_HOURS * 60 * 60 * 1000);
+			var expiresAt = new Date(now.getTime() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
 
 			var sessionDoc = doc(sessionsRef);
 			var session: Session = {
@@ -73,7 +74,18 @@ export function createSession(): Promise<Session> {
 	return tryCreateWithCode();
 }
 
-// Get session by ID
+// Extend a session's expiration by another SESSION_DURATION_DAYS
+function extendSession(sessionId: string): Promise<Date> {
+	var now = new Date();
+	var newExpiresAt = new Date(now.getTime() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
+	return updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), {
+		expiresAt: Timestamp.fromDate(newExpiresAt)
+	}).then(function() {
+		return newExpiresAt;
+	});
+}
+
+// Get session by ID (extends expired sessions automatically)
 export function getSessionById(sessionId: string): Promise<Session | null> {
 	return getDoc(doc(db, SESSIONS_COLLECTION, sessionId)).then(function(sessionDoc) {
 		if (!sessionDoc.exists()) {
@@ -88,16 +100,19 @@ export function getSessionById(sessionId: string): Promise<Session | null> {
 			expiresAt: data.expiresAt.toDate()
 		};
 
-		// Check if expired
+		// If expired, extend the session
 		if (session.expiresAt < new Date()) {
-			return null;
+			return extendSession(sessionId).then(function(newExpiresAt) {
+				session.expiresAt = newExpiresAt;
+				return session;
+			});
 		}
 
 		return session;
 	});
 }
 
-// Get session by pairing code
+// Get session by pairing code (extends expired sessions automatically)
 export function getSessionByCode(code: string): Promise<Session | null> {
 	var sessionsRef = collection(db, SESSIONS_COLLECTION);
 	var q = query(sessionsRef, where('code', '==', code.toUpperCase()));
@@ -116,9 +131,12 @@ export function getSessionByCode(code: string): Promise<Session | null> {
 			expiresAt: data.expiresAt.toDate()
 		};
 
-		// Check if expired
+		// If expired, extend the session
 		if (session.expiresAt < new Date()) {
-			return null;
+			return extendSession(session.id).then(function(newExpiresAt) {
+				session.expiresAt = newExpiresAt;
+				return session;
+			});
 		}
 
 		return session;

@@ -7,8 +7,10 @@ service cloud.firestore {
       allow read: if true;
       // Anyone can create a session
       allow create: if true;
-      // No updates or deletes from client
-      allow update, delete: if false;
+      // Allow updates to extend session expiration
+      allow update: if true;
+      // No deletes from client
+      allow delete: if false;
     }
 
     // Files collection

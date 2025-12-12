@@ -4,6 +4,7 @@ import * as admin from "firebase-admin";
 admin.initializeApp();
 
 const db = admin.firestore();
+const SESSION_DURATION_DAYS = 90; // 3 months
 
 // Helper to format file size
 function formatFileSize(bytes: number): string {
@@ -246,16 +247,13 @@ export const kobo = functions.https.onRequest(async (req, res) => {
     const sessionDoc = sessionQuery.docs[0];
     const sessionData = sessionDoc.data();
 
-    // Check if expired
+    // Check if expired - if so, extend the session
     const expiresAt = sessionData.expiresAt.toDate();
     if (expiresAt < new Date()) {
-      const html = renderPage("Expired", `
-<h1>Send2Kobo</h1>
-<div class="error">This session has expired. Please create a new session on your computer.</div>
-<p><a href="/kobo" class="btn">Try Again</a></p>
-      `);
-      res.send(html);
-      return;
+      const newExpiresAt = new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
+      await sessionDoc.ref.update({
+        expiresAt: admin.firestore.Timestamp.fromDate(newExpiresAt),
+      });
     }
 
     // Get files for this session
