@@ -8,7 +8,7 @@ Transfer files to your Kobo e-reader wirelessly using a simple pairing code.
 - Download on your Kobo e-reader using a 6-character pairing code
 - Server-rendered Kobo page (works on Kobo's limited browser)
 - Supports all Kobo-compatible formats: EPUB, PDF, MOBI, TXT, CBZ, CBR, and more
-- Sessions expire after 24 hours
+- Sessions expire after 3 months (auto-extended on access)
 - 5GB max file size
 
 ## How It Works
@@ -161,4 +161,22 @@ cd functions && npm run build
 ## URL Parameters
 
 - **Upload page:** `https://your-site.web.app/upload?code=ABC123` - Reconnect to an existing session
+- **Download page:** `https://your-site.web.app/download?code=ABC123` - Auto-connect with code
 - **Kobo page:** `https://your-site.web.app/kobo?code=ABC123` - Auto-connect with code
+
+## CI/CD
+
+The project uses GitHub Actions to automatically deploy on push to `main`. See `.github/workflows/deploy.yml`.
+
+### Set up the GitHub secret:
+
+1. Go to [Firebase Console](https://console.firebase.google.com/) → Project Settings → Service Accounts
+2. Click "Generate new private key" → Download the JSON file
+3. Go to your GitHub repo → Settings → Secrets and variables → Actions
+4. Click "New repository secret"
+5. Name: `FIREBASE_SERVICE_ACCOUNT`
+6. Value: Paste the entire JSON content from the downloaded file
+
+## TODO
+
+- [ ] Upgrade firebase-functions to latest version (`cd functions && npm install --save firebase-functions@latest`)
