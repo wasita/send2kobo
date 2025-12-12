@@ -68,7 +68,9 @@
 				saveSession(session.id, session.code);
 				return getFilesBySession(session.id);
 			} else {
-				// Code not found, create new session
+				// Code not found - show error, don't auto-create new session
+				console.error('Session not found for code:', code);
+				alert('Session code not found: ' + code);
 				return createNewSession();
 			}
 		}).then(function(result) {
@@ -76,7 +78,9 @@
 				files = result;
 			}
 			loading = false;
-		}).catch(function() {
+		}).catch(function(err) {
+			console.error('Error connecting with code:', err);
+			alert('Error connecting to session: ' + code);
 			createNewSession().then(function() {
 				loading = false;
 			});

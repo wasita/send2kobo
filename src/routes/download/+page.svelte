@@ -1,4 +1,5 @@
 <script>
+	import { onMount } from 'svelte';
 	import CodeEntry from '../../components/CodeEntry.svelte';
 	import FileList from '../../components/FileList.svelte';
 	import { getSessionByCode, getFilesBySession } from '$lib/firestore';
@@ -8,6 +9,19 @@
 	var error = $state('');
 	var sessionCode = $state('');
 	var files = $state([]);
+
+	onMount(function() {
+		// Check for code in URL query params
+		var urlParams = new URLSearchParams(window.location.search);
+		var codeParam = urlParams.get('code');
+
+		if (codeParam) {
+			var cleanCode = codeParam.toUpperCase().replace(/[^A-Z0-9]/g, '');
+			if (cleanCode.length === 6) {
+				handleCodeSubmit(cleanCode);
+			}
+		}
+	});
 
 	function handleCodeSubmit(code) {
 		loading = true;
