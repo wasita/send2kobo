@@ -138,6 +138,7 @@ send2kobo/
 
 - **`/kobo`** - Server-rendered download page for Kobo e-readers
 - **`/download`** - Download proxy that sets correct filename headers
+- **`cleanupExpiredSessions`** - Scheduled weekly (Sundays 3am UTC) to delete sessions expired 7+ days ago and their files
 
 ## Development
 

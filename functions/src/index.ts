@@ -4,7 +4,9 @@ import * as admin from "firebase-admin";
 admin.initializeApp();
 
 const db = admin.firestore();
+const storage = admin.storage();
 const SESSION_DURATION_DAYS = 90; // 3 months
+const CLEANUP_GRACE_DAYS = 7; // Days after expiration before cleanup
 
 // Helper to format file size
 function formatFileSize(bytes: number): string {
@@ -312,3 +314,73 @@ ${fileListHtml}
     res.send(html);
   }
 });
+
+// Scheduled cleanup - runs every Sunday at 3am UTC
+// Deletes sessions expired more than CLEANUP_GRACE_DAYS ago and their files
+export const cleanupExpiredSessions = functions.pubsub
+  .schedule("0 3 * * 0") // Cron: every Sunday at 3:00 AM UTC
+  .timeZone("UTC")
+  .onRun(async () => {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - CLEANUP_GRACE_DAYS);
+
+    console.log(`Cleaning up sessions expired before ${cutoffDate.toISOString()}`);
+
+    try {
+      // Find expired sessions
+      const sessionsRef = db.collection("sessions");
+      const expiredSessions = await sessionsRef
+        .where("expiresAt", "<", admin.firestore.Timestamp.fromDate(cutoffDate))
+        .get();
+
+      if (expiredSessions.empty) {
+        console.log("No expired sessions to clean up");
+        return null;
+      }
+
+      console.log(`Found ${expiredSessions.size} expired sessions to clean up`);
+
+      const bucket = storage.bucket();
+      let deletedSessions = 0;
+      let deletedFiles = 0;
+
+      for (const sessionDoc of expiredSessions.docs) {
+        const sessionId = sessionDoc.id;
+
+        try {
+          // Get all files for this session
+          const filesRef = db.collection("files");
+          const filesQuery = await filesRef.where("sessionId", "==", sessionId).get();
+
+          // Delete files from Storage and Firestore
+          for (const fileDoc of filesQuery.docs) {
+            const fileData = fileDoc.data();
+
+            // Delete from Storage
+            try {
+              await bucket.file(fileData.storagePath).delete();
+            } catch (storageErr) {
+              // File might already be deleted, continue
+              console.log(`Storage file not found: ${fileData.storagePath}`);
+            }
+
+            // Delete file metadata from Firestore
+            await fileDoc.ref.delete();
+            deletedFiles++;
+          }
+
+          // Delete the session document
+          await sessionDoc.ref.delete();
+          deletedSessions++;
+        } catch (sessionErr) {
+          console.error(`Error cleaning up session ${sessionId}:`, sessionErr);
+        }
+      }
+
+      console.log(`Cleanup complete: ${deletedSessions} sessions, ${deletedFiles} files deleted`);
+      return null;
+    } catch (error) {
+      console.error("Cleanup error:", error);
+      return null;
+    }
+  });
